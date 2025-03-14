@@ -2,7 +2,7 @@
 
 import { FaSearch } from 'react-icons/fa';
 import Link from 'next/link';
-// import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
+import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 
 // import { useEffect, useState } from 'react';
 // import { useSearchParams, useRouter } from 'next/navigation';
@@ -62,12 +62,8 @@ export default function Header() {
               About
             </li>
           </Link>
-          <Link href='/sign-in'>
-          <li className='hidden md:inline text-slate-700 hover:underline'>
-              Sign-in
-            </li>
-          </Link>
-          {/* <SignedIn>
+         
+          <SignedIn>
             <UserButton />
           </SignedIn>
           <SignedOut>
@@ -76,7 +72,7 @@ export default function Header() {
                 Sign In
               </li>
             </Link>
-          </SignedOut> */}
+          </SignedOut>
         </ul>
       </div>
     </header>
