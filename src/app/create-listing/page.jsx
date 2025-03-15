@@ -1,6 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function CreateListing() {
   const [formData, setFormData] = useState({
@@ -13,6 +19,7 @@ export default function CreateListing() {
     builtInArea: '',
     squareFeet: '',
     regularPrice: 50,
+    sellingPrice: '',
     parking: false,
     imageUrls: [],
   });
@@ -20,37 +27,68 @@ export default function CreateListing() {
   const [selectedFiles, setSelectedFiles] = useState([]);
 
   const handleChange = (e) => {
-    const { id, value, type, checked } = e.target;
-
+    const { id, value, type, checked, files } = e.target;
     if (type === 'checkbox') {
-      if (id === 'sell' || id === 'rent') {
-        setFormData({ ...formData, type: id });
-      } else {
-        setFormData({ ...formData, [id]: checked });
-      }
-    } else if (id === 'images') {
-      setSelectedFiles(e.target.files);
+      setFormData({ ...formData, [id]: checked });
+    } else if (type === 'file') {
+      setSelectedFiles(files);
     } else {
       setFormData({ ...formData, [id]: value });
     }
   };
 
   const handleUpload = async () => {
-    if (selectedFiles.length === 0) {
+    if (!selectedFiles || selectedFiles.length === 0) {
       alert('Please select files to upload.');
       return;
     }
-
-    // Simulate upload process (replace with actual upload logic)
-    const uploadedUrls = Array.from(selectedFiles).map((file) => URL.createObjectURL(file));
-
+  
+    const uploadedUrls = [];
+    for (const file of selectedFiles) {
+      // Correctly formatted template literal
+      const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`;
+  
+      const { data, error } = await supabase.storage
+        .from('listing-image')
+        .upload(fileName, file);
+  
+      if (error) {
+        console.error('Upload error:', error);
+        alert(`Failed to upload file: ${file.name}`);
+        return;
+      }
+  
+      const { data: publicUrlData, error: publicUrlError } = supabase.storage
+        .from('listing-image')
+        .getPublicUrl(fileName);
+  
+      if (publicUrlError) {
+        console.error('Error fetching public URL:', publicUrlError);
+        alert(`Failed to get public URL for file: ${file.name}`);
+        return;
+      }
+  
+      uploadedUrls.push(publicUrlData.publicUrl);
+    }
+  
     setFormData({ ...formData, imageUrls: uploadedUrls });
     alert('Images uploaded successfully!');
   };
+  
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Form Submitted:', formData);
+    const response = await fetch('/api/listing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(formData),
+    });
+
+    if (response.ok) {
+      alert('Listing created successfully!');
+    } else {
+      alert('Failed to create listing.');
+    }
   };
 
   return (
@@ -94,10 +132,20 @@ export default function CreateListing() {
               <input type='number' id='squareFeet' min='1' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.squareFeet} />
               Square Feet
             </label>
-            <label className='flex items-center gap-2'>
-              <input type='number' id='regularPrice' min='50' max='10000000' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.regularPrice} />
-              Regular Price ($ / month)
-            </label>
+
+            {formData.type === 'sell' && (
+              <label className='flex items-center gap-2'>
+                <input type='number' id='sellingPrice' min='1000' max='10000000' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.sellingPrice} />
+                Selling Price ($)
+              </label>
+            )}
+
+            {formData.type === 'rent' && (
+              <label className='flex items-center gap-2'>
+                <input type='number' id='regularPrice' min='50' max='10000000' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.regularPrice} />
+                Regular Price ($ / month)
+              </label>
+            )}
           </div>
         </div>
 
@@ -115,6 +163,6 @@ export default function CreateListing() {
           </button>
         </div>
       </form>
-    </main>
+    </main>
   );
 }
