@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,6 +11,13 @@ const supabase = createClient(
 );
 
 export default function CreateListing() {
+  const { isSignedIn, user, isLoaded } = useUser();
+  const [files, setFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState(false);
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -23,6 +32,8 @@ export default function CreateListing() {
     parking: false,
     imageUrls: [],
   });
+
+
 
   const [selectedFiles, setSelectedFiles] = useState([]);
 
@@ -50,7 +61,7 @@ export default function CreateListing() {
   
       const { data, error } = await supabase.storage
         .from('listing-image')
-        .upload(fileName, file);
+        .upload(`${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`, file);
   
       if (error) {
         console.error('Upload error:', error);
