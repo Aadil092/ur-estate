@@ -14,7 +14,7 @@ const supabase = createClient(
 export default function CreateListing() {
   const router = useRouter();
   const [uploadedImages, setUploadedImages] = useState([]);
-
+  const [showDialog, setShowDialog] = useState(false); // For dialog visibility
 
   // State for storing form data
   const [formData, setFormData] = useState({
@@ -28,7 +28,7 @@ export default function CreateListing() {
     squareFeet: '',
     regularPrice: '',
     sellingPrice: '', // Only for 'sell'
-    parking: '', // Boolean field
+    parking: '',
   });
 
   // Handle input changes
@@ -40,36 +40,36 @@ export default function CreateListing() {
     }));
   };
 
-  // Handle form submission
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  // Function to handle saving and publishing a listing
+  const publishBtnHandler = async () => {
     try {
       const validatedData = {
         ...formData,
         parking: !!formData.parking, // Ensure boolean value for parking
-        bedrooms: Number(formData.bedrooms), // Ensure numeric value for bedrooms
-        bathrooms: Number(formData.bathrooms), // Ensure numeric value for bathrooms
-        squareFeet: Number(formData.squareFeet), // Ensure numeric value for square feet
-        regularPrice: formData.type === 'rent' ? Number(formData.regularPrice) : null, // Null if not 'rent'
-        sellingPrice: formData.type === 'sell' ? Number(formData.sellingPrice) : null, // Null if not 'sell'
+        bedrooms: Number(formData.bedrooms),
+        bathrooms: Number(formData.bathrooms),
+        squareFeet: Number(formData.squareFeet),
+        regularPrice: formData.type === 'rent' ? Number(formData.regularPrice) : null,
+        sellingPrice: formData.type === 'sell' ? Number(formData.sellingPrice) : null,
+        images: uploadedImages, // Pass uploaded image paths
+        isPublished: true, // Automatically mark the listing as published
       };
 
-      // Insert data into the 'avatars' table
+      // Insert data into the avatars table
       const { error: dbError } = await supabase
-        .from('avatars') // Replace 'avatars' with your table name
+        .from('avatars') // Use the correct table name
         .insert([validatedData]);
 
       if (dbError) {
-        console.error('Error inserting data into the database:', dbError);
-        alert('Failed to create listing. Please try again.');
+        console.error('Error inserting data into the database:', dbError.message || dbError);
+        alert(`Failed to save and publish the listing: ${dbError.message || 'Unknown error'}`);
         return;
       }
 
-      alert('Listing created successfully!');
+      alert('Listing saved and published successfully!');
       router.push('/'); // Redirect to the home page or another relevant page
     } catch (error) {
-      console.error('Unexpected error:', error);
+      console.error('Unexpected error occurred:', error.message || error);
       alert('An unexpected error occurred. Please try again later.');
     }
   };
@@ -77,9 +77,14 @@ export default function CreateListing() {
   return (
     <main className="px-10 md:px-36 my-10">
       <h1 className="font-bold text-2xl">Enter Details About Your Listing</h1>
-      <form className="p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
+      <form
+        className="p-8 rounded-lg shadow-md"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setShowDialog(true); // Open confirmation dialog
+        }}
+      >
         <div className="flex flex-col gap-4 flex-1">
-         
           <input
             type="text"
             placeholder="Name"
@@ -132,8 +137,6 @@ export default function CreateListing() {
           </div>
 
           {/* Number Fields */}
-          
-          <h2>Bedrooms</h2>
           <input
             type="number"
             placeholder="Bedrooms"
@@ -176,32 +179,30 @@ export default function CreateListing() {
             onChange={handleChange}
           />
 
-          <div>
-            {formData.type === 'sell' && (
-              <input
-                type="number"
-                placeholder="Selling Price"
-                id="sellingPrice"
-                min="1000"
-                required
-                className="border p-3 rounded-lg"
-                value={formData.sellingPrice}
-                onChange={handleChange}
-              />
-            )}
-            {formData.type === 'rent' && (
-              <input
-                type="number"
-                placeholder="Regular Price"
-                id="regularPrice"
-                min="500"
-                required
-                className="border p-3 rounded-lg"
-                value={formData.regularPrice}
-                onChange={handleChange}
-              />
-            )}
-          </div>
+          {formData.type === 'sell' && (
+            <input
+              type="number"
+              placeholder="Selling Price"
+              id="sellingPrice"
+              min="1000"
+              required
+              className="border p-3 rounded-lg"
+              value={formData.sellingPrice}
+              onChange={handleChange}
+            />
+          )}
+          {formData.type === 'rent' && (
+            <input
+              type="number"
+              placeholder="Regular Price"
+              id="regularPrice"
+              min="500"
+              required
+              className="border p-3 rounded-lg"
+              value={formData.regularPrice}
+              onChange={handleChange}
+            />
+          )}
 
           <input
             type="number"
@@ -215,18 +216,47 @@ export default function CreateListing() {
             onChange={handleChange}
           />
           <div>
-            <FileUpload setImages={setUploadedImages}/>
+            <FileUpload setImages={setUploadedImages} />
           </div>
 
           {/* Submit Button */}
           <button
             type="submit"
-            className="p-3 bg-slate-700 text-white rounded-lg uppercase hover:opacity-95"
+            className="p-3 bg-blue-600 text-white rounded-lg uppercase hover:opacity-95"
           >
-            Create Listing
+            Save and Publish
           </button>
         </div>
       </form>
+
+      {/* Confirmation Dialog */}
+      {showDialog && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full">
+            <h2 className="text-lg font-bold">Do you really want to publish this listing?</h2>
+            <p className="text-sm text-gray-600 mt-2">
+              Once published, your listing will be visible to all users.
+            </p>
+            <div className="mt-4 flex justify-end space-x-3">
+              <button
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                onClick={() => setShowDialog(false)} // Close dialog
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                onClick={() => {
+                  setShowDialog(false); // Close dialog
+                  publishBtnHandler(); // Run publish handler
+                }}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
