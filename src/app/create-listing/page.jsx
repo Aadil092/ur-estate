@@ -2,178 +2,231 @@
 
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
+import FileUpload from '../api/listing/_components/FileUpload';
 
+// Initialize Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
 export default function CreateListing() {
-  const { isSignedIn, user, isLoaded } = useUser();
-  const [files, setFiles] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [imageUploadError, setImageUploadError] = useState(false);
-  const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const [uploadedImages, setUploadedImages] = useState([]);
+
+
+  // State for storing form data
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     address: '',
-    type: 'rent',
-    bedrooms: 1,
-    bathrooms: 1,
+    type: 'rent', // Default value for type
+    bedrooms: '',
+    bathrooms: '',
     builtInArea: '',
     squareFeet: '',
-    regularPrice: 50,
-    sellingPrice: '',
-    parking: false,
-    imageUrls: [],
+    regularPrice: '',
+    sellingPrice: '', // Only for 'sell'
+    parking: '', // Boolean field
   });
 
-
-
-  const [selectedFiles, setSelectedFiles] = useState([]);
-
+  // Handle input changes
   const handleChange = (e) => {
-    const { id, value, type, checked, files } = e.target;
-    if (type === 'checkbox') {
-      setFormData({ ...formData, [id]: checked });
-    } else if (type === 'file') {
-      setSelectedFiles(files);
-    } else {
-      setFormData({ ...formData, [id]: value });
-    }
+    const { id, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [id]: type === 'checkbox' ? checked : value,
+    }));
   };
 
-  const handleUpload = async () => {
-    if (!selectedFiles || selectedFiles.length === 0) {
-      alert('Please select files to upload.');
-      return;
-    }
-  
-    const uploadedUrls = [];
-    for (const file of selectedFiles) {
-      // Correctly formatted template literal
-      const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`;
-  
-      const { data, error } = await supabase.storage
-        .from('listing-image')
-        .upload(`${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`, file);
-  
-      if (error) {
-        console.error('Upload error:', error);
-        alert(`Failed to upload file: ${file.name}`);
-        return;
-      }
-  
-      const { data: publicUrlData, error: publicUrlError } = supabase.storage
-        .from('listing-image')
-        .getPublicUrl(fileName);
-  
-      if (publicUrlError) {
-        console.error('Error fetching public URL:', publicUrlError);
-        alert(`Failed to get public URL for file: ${file.name}`);
-        return;
-      }
-  
-      uploadedUrls.push(publicUrlData.publicUrl);
-    }
-  
-    setFormData({ ...formData, imageUrls: uploadedUrls });
-    alert('Images uploaded successfully!');
-  };
-  
-
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const response = await fetch('/api/listing', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData),
-    });
 
-    if (response.ok) {
+    try {
+      const validatedData = {
+        ...formData,
+        parking: !!formData.parking, // Ensure boolean value for parking
+        bedrooms: Number(formData.bedrooms), // Ensure numeric value for bedrooms
+        bathrooms: Number(formData.bathrooms), // Ensure numeric value for bathrooms
+        squareFeet: Number(formData.squareFeet), // Ensure numeric value for square feet
+        regularPrice: formData.type === 'rent' ? Number(formData.regularPrice) : null, // Null if not 'rent'
+        sellingPrice: formData.type === 'sell' ? Number(formData.sellingPrice) : null, // Null if not 'sell'
+      };
+
+      // Insert data into the 'avatars' table
+      const { error: dbError } = await supabase
+        .from('avatars') // Replace 'avatars' with your table name
+        .insert([validatedData]);
+
+      if (dbError) {
+        console.error('Error inserting data into the database:', dbError);
+        alert('Failed to create listing. Please try again.');
+        return;
+      }
+
       alert('Listing created successfully!');
-    } else {
-      alert('Failed to create listing.');
+      router.push('/'); // Redirect to the home page or another relevant page
+    } catch (error) {
+      console.error('Unexpected error:', error);
+      alert('An unexpected error occurred. Please try again later.');
     }
   };
 
   return (
-    <main className='p-3 max-w-4xl mx-auto'>
-      <h1 className='text-3xl font-semibold text-center my-7'>Create a Listing</h1>
-      <form className='flex flex-col sm:flex-row gap-4' onSubmit={handleSubmit}>
-        <div className='flex flex-col gap-4 flex-1'>
-          <input type='text' placeholder='Name' className='border p-3 rounded-lg' id='name' required onChange={handleChange} value={formData.name} />
-          <textarea placeholder='Description' className='border p-3 rounded-lg' id='description' required onChange={handleChange} value={formData.description} />
-          <input type='text' placeholder='Address' className='border p-3 rounded-lg' id='address' required onChange={handleChange} value={formData.address} />
+    <main className="px-10 md:px-36 my-10">
+      <h1 className="font-bold text-2xl">Enter Details About Your Listing</h1>
+      <form className="p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
+        <div className="flex flex-col gap-4 flex-1">
+         
+          <input
+            type="text"
+            placeholder="Name"
+            id="name"
+            className="border p-3 rounded-lg"
+            required
+            value={formData.name}
+            onChange={handleChange}
+          />
+          <textarea
+            placeholder="Description"
+            id="description"
+            className="border p-3 rounded-lg"
+            required
+            value={formData.description}
+            onChange={handleChange}
+          />
+          <input
+            type="text"
+            placeholder="Address"
+            id="address"
+            className="border p-3 rounded-lg"
+            required
+            value={formData.address}
+            onChange={handleChange}
+          />
 
-          <div className='flex gap-6 flex-wrap'>
-            <label className='flex gap-2'>
-              <input type='checkbox' id='sell' onChange={handleChange} checked={formData.type === 'sell'} />
+          {/* Radio Buttons for Rent/Sell */}
+          <div className="flex gap-6 flex-wrap">
+            <label className="flex gap-2">
+              <input
+                type="radio"
+                name="type"
+                value="sell"
+                onChange={() => setFormData({ ...formData, type: 'sell' })}
+                checked={formData.type === 'sell'}
+              />
               Sell
             </label>
-            <label className='flex gap-2'>
-              <input type='checkbox' id='rent' onChange={handleChange} checked={formData.type === 'rent'} />
+            <label className="flex gap-2">
+              <input
+                type="radio"
+                name="type"
+                value="rent"
+                onChange={() => setFormData({ ...formData, type: 'rent' })}
+                checked={formData.type === 'rent'}
+              />
               Rent
             </label>
-            <label className='flex gap-2'>
-              <input type='checkbox' id='parking' onChange={handleChange} checked={formData.parking} />
-              Parking
-            </label>
           </div>
 
-          <div className='flex flex-wrap gap-6'>
-            <label className='flex items-center gap-2'>
-              <input type='number' id='bedrooms' min='1' max='10' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.bedrooms} />
-              Beds
-            </label>
-            <label className='flex items-center gap-2'>
-              <input type='number' id='bathrooms' min='1' max='10' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.bathrooms} />
-              Baths
-            </label>
-            <label className='flex items-center gap-2'>
-              <input type='text' id='builtInArea' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.builtInArea} />
-              Built-in Area
-            </label>
-            <label className='flex items-center gap-2'>
-              <input type='number' id='squareFeet' min='1' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.squareFeet} />
-              Square Feet
-            </label>
+          {/* Number Fields */}
+          
+          <h2>Bedrooms</h2>
+          <input
+            type="number"
+            placeholder="Bedrooms"
+            id="bedrooms"
+            min="1"
+            max="10"
+            className="border p-3 rounded-lg"
+            required
+            value={formData.bedrooms}
+            onChange={handleChange}
+          />
+          <input
+            type="number"
+            placeholder="Bathrooms"
+            id="bathrooms"
+            min="1"
+            max="10"
+            className="border p-3 rounded-lg"
+            required
+            value={formData.bathrooms}
+            onChange={handleChange}
+          />
+          <input
+            type="text"
+            placeholder="Built-In Area"
+            id="builtInArea"
+            className="border p-3 rounded-lg"
+            required
+            value={formData.builtInArea}
+            onChange={handleChange}
+          />
+          <input
+            type="number"
+            placeholder="Square Feet"
+            id="squareFeet"
+            min="1"
+            className="border p-3 rounded-lg"
+            required
+            value={formData.squareFeet}
+            onChange={handleChange}
+          />
 
+          <div>
             {formData.type === 'sell' && (
-              <label className='flex items-center gap-2'>
-                <input type='number' id='sellingPrice' min='1000' max='10000000' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.sellingPrice} />
-                Selling Price ($)
-              </label>
+              <input
+                type="number"
+                placeholder="Selling Price"
+                id="sellingPrice"
+                min="1000"
+                required
+                className="border p-3 rounded-lg"
+                value={formData.sellingPrice}
+                onChange={handleChange}
+              />
             )}
-
             {formData.type === 'rent' && (
-              <label className='flex items-center gap-2'>
-                <input type='number' id='regularPrice' min='50' max='10000000' required className='p-3 border rounded-lg' onChange={handleChange} value={formData.regularPrice} />
-                Regular Price ($ / month)
-              </label>
+              <input
+                type="number"
+                placeholder="Regular Price"
+                id="regularPrice"
+                min="500"
+                required
+                className="border p-3 rounded-lg"
+                value={formData.regularPrice}
+                onChange={handleChange}
+              />
             )}
           </div>
-        </div>
 
-        <div className='flex flex-col flex-1 gap-4'>
-          <p className='font-semibold'>Images:</p>
-          <div className='flex gap-4'>
-            <input className='p-3 border rounded w-full' type='file' id='images' accept='image/*' multiple onChange={handleChange} />
-            <button type='button' onClick={handleUpload} className='p-3 bg-green-600 text-white rounded-lg uppercase hover:opacity-95'>
-              Upload
-            </button>
+          <input
+            type="number"
+            placeholder="Parking Spaces"
+            id="parking"
+            min="0"
+            max="10"
+            className="border p-3 rounded-lg"
+            required
+            value={formData.parking}
+            onChange={handleChange}
+          />
+          <div>
+            <FileUpload setImages={setUploadedImages}/>
           </div>
 
-          <button className='p-3 bg-slate-700 text-white rounded-lg uppercase hover:opacity-95' type='submit'>
+          {/* Submit Button */}
+          <button
+            type="submit"
+            className="p-3 bg-slate-700 text-white rounded-lg uppercase hover:opacity-95"
+          >
             Create Listing
           </button>
         </div>
       </form>
-    </main>
-  );
+    </main>
+  );
 }
