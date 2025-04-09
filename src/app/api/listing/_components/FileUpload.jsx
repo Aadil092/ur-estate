@@ -1,7 +1,7 @@
-'use client';
-
-import React, { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import React, { useState } from "react";
+import Image from "next/image";
+import { createClient } from "@supabase/supabase-js";
+import { toast } from "react-toastify";
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -9,121 +9,134 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-function FileUpload({ setImages }) {
-  const [imagePreview, setImagePreview] = useState([]);
-  const [files, setFiles] = useState([]);
-  const [isUploading, setIsUploading] = useState(false);
+function FileUpload({ listingId }) {
+  const [imagePreview, setImagePreview] = useState([]); // Preview for selected images
+  const [uploadedFiles, setUploadedFiles] = useState([]); // Files to be uploaded
+  const [loading, setLoading] = useState(false); // Loading state
 
-  const handleFileChoose = (event) => {
-    const selectedFiles = Array.from(event.target.files);
+  // Handle file selection and preview generation
+  const handleFileUpload = (event) => {
+    const files = Array.from(event.target.files);
+    const previews = files.map((file) => URL.createObjectURL(file));
 
-    // Validate selected files
-    const allowedTypes = ['image/png', 'image/jpeg', 'image/gif'];
-    const validFiles = selectedFiles.filter((file) =>
-      allowedTypes.includes(file.type)
-    );
-
-    const previews = validFiles.map((file) => URL.createObjectURL(file));
-    setFiles((prevFiles) => [...prevFiles, ...validFiles]); // Add new files to state
-    setImagePreview((prevPreviews) => [...prevPreviews, ...previews]); // Add new previews to state
+    setImagePreview((prev) => [...prev, ...previews]); // Add previews to the existing state
+    setUploadedFiles((prev) => [...prev, ...files]); // Add files to the existing state
   };
 
-  const handleFileRemove = (index) => {
-    // Remove the file and its preview by index
-    setFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
-    setImagePreview((prevPreviews) => prevPreviews.filter((_, i) => i !== index));
+  // Remove an image from the preview and files
+  const removeImage = (index) => {
+    setImagePreview((prev) => prev.filter((_, i) => i !== index)); // Remove from previews
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index)); // Remove from files
   };
 
+  // Handle image upload to Supabase storage and insertion into the database
   const handleUpload = async () => {
-    if (files.length === 0) {
-      alert('No files selected for upload.');
-      return;
-    }
-
     try {
-      setIsUploading(true);
-      const uploadedPaths = [];
+      if (!listingId) {
+        toast.error("Listing ID is required to upload images.");
+        return;
+      }
 
-      for (const file of files) {
-        const { data, error } = await supabase.storage
-          .from('listing-image') // Replace with your bucket name
-          .upload(`public/${Date.now()}_${file.name}`, file, {
-            cacheControl: '3600',
-            upsert: false,
+      setLoading(true);
+
+      for (const file of uploadedFiles) {
+        const fileName = `${Date.now()}_${file.name}`; // Unique file name
+        const fileExt = file.name.split(".").pop();
+
+        // Upload file to Supabase storage
+        const { error: uploadError } = await supabase.storage
+          .from("listingimages")
+          .upload(fileName, file, {
+            contentType: `image/${fileExt}`, // Set appropriate content type
           });
 
-        if (error) {
-          console.error('Error uploading file:', error.message);
-          alert(`Failed to upload ${file.name}: ${error.message}`);
+        if (uploadError) {
+          console.error("Error uploading image:", uploadError.message);
+          toast.error(`Failed to upload ${file.name}: ${uploadError.message}`);
           continue;
         }
 
-        uploadedPaths.push(data.path);
+        // Generate public URL for the image
+        const imageUrl = `${process.env.NEXT_PUBLIC_IMAGE_URL}/${fileName}`;
+
+        // Insert image URL and listing_id into the database
+        const { error: dbError } = await supabase
+          .from("listingimages")
+          .insert([{ url: imageUrl, listing_id: listingId }]);
+
+        if (dbError) {
+          console.error("Error inserting image URL into database:", dbError.message);
+          toast.error(`Failed to save image in database: ${dbError.message}`);
+          continue;
+        }
       }
 
-      setImages(uploadedPaths); // Pass the paths to the parent component
-      alert('Files uploaded successfully!');
-      setFiles([]); // Clear the files after upload
-      setImagePreview([]); // Clear the previews after upload
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      alert('An unexpected error occurred during file upload.');
+      toast.success("Images uploaded and associated with the listing successfully!");
+      setImagePreview([]); // Clear previews
+      setUploadedFiles([]); // Clear selected files
+    } catch (err) {
+      console.error("Error:", err.message);
+      toast.error("Something went wrong: " + err.message);
     } finally {
-      setIsUploading(false);
+      setLoading(false);
     }
   };
 
   return (
     <div>
-      <div className="flex items-center justify-center w-full">
-        <label
-          htmlFor="file-input"
-          className="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
-        >
-          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-            <svg
-              className="w-8 h-8 mb-4 text-gray-500"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 16"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5A5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <p className="mb-2 text-sm text-gray-500">
-              <span className="font-semibold">Click to upload</span> or drag and drop
-            </p>
-            <p className="text-xs text-gray-500">PNG, JPG, GIF (MAX: 10MB)</p>
-          </div>
-          <input
-            id="file-input"
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileChoose}
-          />
-        </label>
-      </div>
+      {/* File Input for Image Selection */}
+      <label
+        htmlFor="dropzone-file"
+        className="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer dark:hover:bg-gray-800 dark:bg-gray-700 hover:bg-gray-800 dark:border-gray-600 dark:hover:border-gray-500"
+      >
+        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+          <svg
+            className="w-full h-8 mb-4 text-gray-500 dark:text-gray-400"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 20 16"
+          >
+            <path
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
+            />
+          </svg>
+          <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+            <span className="font-semibold">Click to upload</span> or drag and drop
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            SVG, PNG, JPG, or GIF (MAX. 800x400px)
+          </p>
+        </div>
+        <input
+          id="dropzone-file"
+          type="file"
+          className="hidden"
+          multiple
+          accept="image/png, image/jpeg, image/gif"
+          onChange={handleFileUpload}
+        />
+      </label>
 
-      {isUploading && <p>Uploading files... Please wait.</p>}
-
-      {/* File Previews with Remove Option */}
-      <div className="mt-4 grid grid-cols-2 gap-4">
-        {imagePreview.map((url, index) => (
-          <div key={index} className="relative group">
-            <img src={url} alt={`Preview ${index}`} className="rounded-lg w-full h-auto" />
+      {/* Image Previews with Remove Option */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-6">
+        {imagePreview.map((image, index) => (
+          <div key={index} className="relative">
+            <Image
+              src={image}
+              width={150}
+              height={150}
+              alt={`Preview ${index}`}
+              className="rounded-lg object-cover h-[100px] w-[100px]"
+            />
             <button
-              type="button"
-              className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full text-xs hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => handleFileRemove(index)}
+              onClick={() => removeImage(index)}
+              className="absolute top-1 right-1 bg-red-500 text-white rounded-full px-2 text-sm hover:bg-red-400"
             >
-              ✕
+              ×
             </button>
           </div>
         ))}
@@ -131,11 +144,11 @@ function FileUpload({ setImages }) {
 
       {/* Upload Button */}
       <button
-        type="button"
-        className="mt-4 p-3 bg-blue-600 text-white rounded-lg uppercase hover:opacity-95"
+        className="mt-6 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-400 focus:ring-2 focus:ring-purple-600"
         onClick={handleUpload}
+        disabled={loading || !uploadedFiles.length}
       >
-        Upload Files
+        {loading ? "Uploading..." : "Upload Images"}
       </button>
     </div>
   );

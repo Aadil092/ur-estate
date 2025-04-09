@@ -1,9 +1,19 @@
-'use client';
-
-import { useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
-import FileUpload from '../api/listing/_components/FileUpload';
+"use client";
+import React, { useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation"; // To navigate to the home page
+import FileUpload from "../api/listing/_components/FileUpload";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "react-toastify";
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -11,252 +21,211 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-export default function CreateListing() {
-  const router = useRouter();
-  const [uploadedImages, setUploadedImages] = useState([]);
-  const [showDialog, setShowDialog] = useState(false); // For dialog visibility
-
-  // State for storing form data
+function CreateListing() {
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    address: '',
-    type: 'rent', // Default value for type
-    bedrooms: '',
-    bathrooms: '',
-    builtInArea: '',
-    squareFeet: '',
-    regularPrice: '',
-    sellingPrice: '', // Only for 'sell'
-    parking: '',
+    address: "",
+    rentOrSell: "Rent",
+    propertyType: "",
+    bedroom: "",
+    bathroom: "",
+    builtIn: "",
+    parking: "",
+    lotSize: "",
+    area: "",
+    price: "",
+    description: "",
   });
 
-  // Handle input changes
-  const handleChange = (e) => {
-    const { id, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [id]: type === 'checkbox' ? checked : value,
+  const [listingId, setListingId] = useState(null); // To store the created listing ID
+  const [isAlertOpen, setIsAlertOpen] = useState(false); // State to toggle AlertDialog
+  const router = useRouter(); // To navigate to the home page
+
+  // Handle text input changes
+  const handleInputChange = (e) => {
+    const { id, value } = e.target;
+    setFormData((prevData) => ({
+      ...prevData,
+      [id]: value,
     }));
   };
 
-  // Function to handle saving and publishing a listing
-  const publishBtnHandler = async () => {
+  // Handle custom field changes
+  const handleCustomChange = (field, value) => {
+    setFormData((prevData) => ({
+      ...prevData,
+      [field]: value,
+    }));
+  };
+
+  const saveListing = async () => {
     try {
-      const validatedData = {
-        ...formData,
-        parking: !!formData.parking, // Ensure boolean value for parking
-        bedrooms: Number(formData.bedrooms),
-        bathrooms: Number(formData.bathrooms),
-        squareFeet: Number(formData.squareFeet),
-        regularPrice: formData.type === 'rent' ? Number(formData.regularPrice) : null,
-        sellingPrice: formData.type === 'sell' ? Number(formData.sellingPrice) : null,
-        images: uploadedImages, // Pass uploaded image paths
-        isPublished: true, // Automatically mark the listing as published
-      };
+      setLoading(true);
 
-      // Insert data into the avatars table
-      const { error: dbError } = await supabase
-        .from('avatars') // Use the correct table name
-        .insert([validatedData]);
+      // Insert listing into the database
+      const { data: listingData, error: listingError } = await supabase
+        .from("listing")
+        .insert([{ ...formData, active: true }]) // Add a listing and make it active
+        .select();
 
-      if (dbError) {
-        console.error('Error inserting data into the database:', dbError.message || dbError);
-        alert(`Failed to save and publish the listing: ${dbError.message || 'Unknown error'}`);
-        return;
-      }
+      if (listingError) throw listingError;
 
-      alert('Listing saved and published successfully!');
-      router.push('/'); // Redirect to the home page or another relevant page
-    } catch (error) {
-      console.error('Unexpected error occurred:', error.message || error);
-      alert('An unexpected error occurred. Please try again later.');
+      // Save the listing ID
+      setListingId(listingData[0].id);
+
+      toast.success("Listing saved & published successfully!");
+
+      // Navigate to the home page after 2 seconds to display the success message briefly
+      setTimeout(() => {
+        router.push("/");
+      }, 2000);
+    } catch (err) {
+      toast.error("Something went wrong: " + err.message);
+    } finally {
+      setLoading(false);
+      setIsAlertOpen(false); // Close the AlertDialog after successful save
     }
   };
 
   return (
-    <main className="px-10 md:px-36 my-10">
-      <h1 className="font-bold text-2xl">Enter Details About Your Listing</h1>
-      <form
-        className="p-8 rounded-lg shadow-md"
-        onSubmit={(e) => {
-          e.preventDefault();
-          setShowDialog(true); // Open confirmation dialog
-        }}
-      >
-        <div className="flex flex-col gap-4 flex-1">
-          <input
-            type="text"
-            placeholder="Name"
-            id="name"
-            className="border p-3 rounded-lg"
-            required
-            value={formData.name}
-            onChange={handleChange}
-          />
-          <textarea
-            placeholder="Description"
-            id="description"
-            className="border p-3 rounded-lg"
-            required
-            value={formData.description}
-            onChange={handleChange}
-          />
-          <input
-            type="text"
-            placeholder="Address"
-            id="address"
-            className="border p-3 rounded-lg"
-            required
-            value={formData.address}
-            onChange={handleChange}
-          />
-
-          {/* Radio Buttons for Rent/Sell */}
-          <div className="flex gap-6 flex-wrap">
-            <label className="flex gap-2">
-              <input
-                type="radio"
-                name="type"
-                value="sell"
-                onChange={() => setFormData({ ...formData, type: 'sell' })}
-                checked={formData.type === 'sell'}
-              />
-              Sell
-            </label>
-            <label className="flex gap-2">
-              <input
-                type="radio"
-                name="type"
-                value="rent"
-                onChange={() => setFormData({ ...formData, type: 'rent' })}
-                checked={formData.type === 'rent'}
-              />
-              Rent
-            </label>
-          </div>
-
-          {/* Number Fields */}
-          <input
-            type="number"
-            placeholder="Bedrooms"
-            id="bedrooms"
-            min="1"
-            max="10"
-            className="border p-3 rounded-lg"
-            required
-            value={formData.bedrooms}
-            onChange={handleChange}
-          />
-          <input
-            type="number"
-            placeholder="Bathrooms"
-            id="bathrooms"
-            min="1"
-            max="10"
-            className="border p-3 rounded-lg"
-            required
-            value={formData.bathrooms}
-            onChange={handleChange}
-          />
-          <input
-            type="text"
-            placeholder="Built-In Area"
-            id="builtInArea"
-            className="border p-3 rounded-lg"
-            required
-            value={formData.builtInArea}
-            onChange={handleChange}
-          />
-          <input
-            type="number"
-            placeholder="Square Feet"
-            id="squareFeet"
-            min="1"
-            className="border p-3 rounded-lg"
-            required
-            value={formData.squareFeet}
-            onChange={handleChange}
-          />
-
-          {formData.type === 'sell' && (
-            <input
-              type="number"
-              placeholder="Selling Price"
-              id="sellingPrice"
-              min="1000"
-              required
-              className="border p-3 rounded-lg"
-              value={formData.sellingPrice}
-              onChange={handleChange}
+    <div className="px-10 md:px-36 bg-gray-900 text-gray-200">
+      <h2 className="font-bold text-4xl mb-10">Enter Details About Your Listing</h2>
+      <div className="p-8 rounded-lg shadow-md bg-gray-800 border border-gray-700">
+        {/* Address Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="flex flex-col">
+            <Label className="font-medium mb-2" htmlFor="address">
+              Address
+            </Label>
+            <Input
+              id="address"
+              type="text"
+              placeholder="Enter address"
+              className="bg-gray-700 text-gray-200 placeholder-gray-500 border-gray-600 focus:ring-purple-500 focus:border-purple-500"
+              value={formData.address}
+              onChange={handleInputChange}
             />
-          )}
-          {formData.type === 'rent' && (
-            <input
-              type="number"
-              placeholder="Regular Price"
-              id="regularPrice"
-              min="500"
-              required
-              className="border p-3 rounded-lg"
-              value={formData.regularPrice}
-              onChange={handleChange}
-            />
-          )}
-
-          <input
-            type="number"
-            placeholder="Parking Spaces"
-            id="parking"
-            min="0"
-            max="10"
-            className="border p-3 rounded-lg"
-            required
-            value={formData.parking}
-            onChange={handleChange}
-          />
-          <div>
-            <FileUpload setImages={setUploadedImages} />
           </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            className="p-3 bg-blue-600 text-white rounded-lg uppercase hover:opacity-95"
-          >
-            Save and Publish
-          </button>
         </div>
-      </form>
 
-      {/* Confirmation Dialog */}
-      {showDialog && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full">
-            <h2 className="text-lg font-bold">Do you really want to publish this listing?</h2>
-            <p className="text-sm text-gray-600 mt-2">
-              Once published, your listing will be visible to all users.
+        {/* Rent or Sell Section */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold mb-4">Rent or Sell?</h2>
+          <RadioGroup
+            defaultValue={formData.rentOrSell}
+            onValueChange={(value) => handleCustomChange("rentOrSell", value)}
+          >
+            <div className="flex items-center space-x-4 mb-3">
+              <RadioGroupItem
+                value="Rent"
+                id="Rent"
+                style={{ accentColor: "purple" }}
+                className="bg-white"
+              />
+              <Label className="font-medium text-gray-200" htmlFor="Rent">
+                Rent
+              </Label>
+            </div>
+            <div className="flex items-center space-x-4">
+              <RadioGroupItem
+                value="Sell"
+                id="Sell"
+                style={{ accentColor: "purple" }}
+                className="bg-white"
+              />
+              <Label className="font-medium text-gray-200" htmlFor="Sell">
+                Sell
+              </Label>
+            </div>
+          </RadioGroup>
+        </div>
+
+        {/* Property Type Section */}
+        <div className="mb-6">
+          <h2 className="font-semibold text-lg mb-4">Property Type</h2>
+          <Select onValueChange={(value) => handleCustomChange("propertyType", value)}>
+            <SelectTrigger className="w-full md:w-[180px] bg-gray-700 text-gray-200 border-gray-600 focus:ring-purple-500 focus:border-purple-500">
+              <SelectValue placeholder="Select Property Type" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 text-gray-200">
+              <SelectItem value="Town House">Town House</SelectItem>
+              <SelectItem value="Flat House">Flat House</SelectItem>
+              <SelectItem value="Villa">Villa</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Additional Inputs */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
+          {[
+            { id: "bedroom", label: "Bedroom", placeholder: "Bedrooms" },
+            { id: "bathroom", label: "Bathroom", placeholder: "Bathrooms" },
+            { id: "builtIn", label: "Built In", placeholder: "Year Built" },
+            { id: "parking", label: "Parking", placeholder: "Parking Spaces" },
+            { id: "lotSize", label: "Lot Size", placeholder: "Lot Size (sq ft)" },
+            { id: "area", label: "Area", placeholder: "Area (sq ft)" },
+            { id: "price", label: "Price", placeholder: "Enter Price" },
+            { id: "description", label: "Description", placeholder: "Enter Description" },
+          ].map((input) => (
+            <div key={input.id} className="flex flex-col">
+              <Label className="font-medium mb-2" htmlFor={input.id}>
+                {input.label}
+              </Label>
+              <Input
+                id={input.id}
+                type="text"
+                placeholder={input.placeholder}
+                className="bg-gray-700 text-gray-200 placeholder-gray-500 border-gray-600 focus:ring-purple-500 focus:border-purple-500"
+                value={formData[input.id]}
+                onChange={handleInputChange}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        {/* Pass the listingId as a prop to FileUpload */}
+        <FileUpload listingId={listingId} />
+      </div>
+
+      {/* Save & Publish Button */}
+      <div className="flex justify-end gap-4 mt-6">
+        <button
+          className="px-6 py-2 rounded bg-purple-500 text-gray-200 font-semibold hover:bg-purple-400 focus:ring-2 focus:ring-purple-600 focus:outline-none"
+          onClick={() => setIsAlertOpen(true)} // Open the AlertDialog
+        >
+          {loading ? "Saving..." : "Save & Publish"}
+        </button>
+      </div>
+
+      {/* AlertDialog */}
+      {isAlertOpen && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-200 mb-4">Confirm Publish</h3>
+            <p className="text-gray-400 mb-6">
+              Are you sure you want to publish this listing? This action cannot be undone.
             </p>
-            <div className="mt-4 flex justify-end space-x-3">
+            <div className="flex justify-end gap-4">
               <button
-                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-                onClick={() => setShowDialog(false)} // Close dialog
+                className="px-4 py-2 rounded bg-gray-500 text-gray-200 hover:bg-gray-400"
+                onClick={() => setIsAlertOpen(false)} // Cancel action
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                onClick={() => {
-                  setShowDialog(false); // Close dialog
-                  publishBtnHandler(); // Run publish handler
-                }}
+                className="px-4 py-2 rounded bg-purple-500 text-gray-200 hover:bg-purple-400"
+                onClick={saveListing} // Confirm action
               >
-                Continue
+                Confirm
               </button>
             </div>
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
+
+export default CreateListing;
