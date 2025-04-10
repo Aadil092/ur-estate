@@ -44,8 +44,6 @@ function AdminPanel() {
     { id: "TotalProperties", label: "Total Properties" },
     { id: "SellProperties", label: "Sell Properties" },
     { id: "RentProperties", label: "Rent Properties" },
-    { id: "SellDetails", label: "Sell Details" },
-    { id: "RentDetails", label: "Rent Details" },
   ];
 
   return (

@@ -53,11 +53,21 @@ function FileUpload({ listingId }) {
         if (uploadError) {
           console.error("Error uploading image:", uploadError.message);
           toast.error(`Failed to upload ${file.name}: ${uploadError.message}`);
-          continue;
+          continue; // Skip to the next file
         }
 
         // Generate public URL for the image
-        const imageUrl = `${process.env.NEXT_PUBLIC_IMAGE_URL}/${fileName}`;
+        const { data: publicUrlData, error: urlError } = supabase.storage
+          .from("listingimages")
+          .getPublicUrl(fileName);
+
+        if (urlError) {
+          console.error("Error generating public URL:", urlError.message);
+          toast.error(`Failed to generate public URL for ${file.name}`);
+          continue; // Skip to the next file
+        }
+
+        const imageUrl = publicUrlData.publicUrl;
 
         // Insert image URL and listing_id into the database
         const { error: dbError } = await supabase
@@ -65,13 +75,15 @@ function FileUpload({ listingId }) {
           .insert([{ url: imageUrl, listing_id: listingId }]);
 
         if (dbError) {
-          console.error("Error inserting image URL into database:", dbError.message);
+          console.error("Error saving image to database:", dbError.message);
           toast.error(`Failed to save image in database: ${dbError.message}`);
-          continue;
+          continue; // Skip to the next file
         }
+
+        toast.success(`Uploaded and saved ${file.name} successfully.`);
       }
 
-      toast.success("Images uploaded and associated with the listing successfully!");
+      toast.success("All images uploaded and associated with the listing successfully!");
       setImagePreview([]); // Clear previews
       setUploadedFiles([]); // Clear selected files
     } catch (err) {
@@ -87,11 +99,11 @@ function FileUpload({ listingId }) {
       {/* File Input for Image Selection */}
       <label
         htmlFor="dropzone-file"
-        className="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer dark:hover:bg-gray-800 dark:bg-gray-700 hover:bg-gray-800 dark:border-gray-600 dark:hover:border-gray-500"
+        className="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:bg-gray-800"
       >
         <div className="flex flex-col items-center justify-center pt-5 pb-6">
           <svg
-            className="w-full h-8 mb-4 text-gray-500 dark:text-gray-400"
+            className="w-full h-8 mb-4 text-gray-500"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 20 16"
@@ -104,12 +116,10 @@ function FileUpload({ listingId }) {
               d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
             />
           </svg>
-          <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mb-2 text-sm text-gray-500">
             <span className="font-semibold">Click to upload</span> or drag and drop
           </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            SVG, PNG, JPG, or GIF (MAX. 800x400px)
-          </p>
+          <p className="text-xs text-gray-500">PNG, JPG, GIF (MAX. 800x400px)</p>
         </div>
         <input
           id="dropzone-file"
@@ -144,7 +154,7 @@ function FileUpload({ listingId }) {
 
       {/* Upload Button */}
       <button
-        className="mt-6 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-400 focus:ring-2 focus:ring-purple-600"
+        className="mt-6 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-400"
         onClick={handleUpload}
         disabled={loading || !uploadedFiles.length}
       >
