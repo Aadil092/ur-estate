@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { createClient } from "@supabase/supabase-js";
-import { toast } from "react-toastify";
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -9,86 +8,91 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-function FileUpload({ listingId }) {
+function FileUpload() {
   const [imagePreview, setImagePreview] = useState([]); // Preview for selected images
-  const [uploadedFiles, setUploadedFiles] = useState([]); // Files to be uploaded
+  const [selectedFiles, setSelectedFiles] = useState([]); // Store selected files
   const [loading, setLoading] = useState(false); // Loading state
+  const [listingId, setListingId] = useState(null); // New listing ID
 
-  // Handle file selection and preview generation
-  const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files);
-    const previews = files.map((file) => URL.createObjectURL(file));
+  // Create a new listing when the component initializes
+  useEffect(() => {
+    const createNewListing = async () => {
+      const { data, error } = await supabase
+        .from("listing")
+        .insert({})
+        .select("id")
+        .single(); // Insert a new listing and fetch its ID
 
-    setImagePreview((prev) => [...prev, ...previews]); // Add previews to the existing state
-    setUploadedFiles((prev) => [...prev, ...files]); // Add files to the existing state
-  };
-
-  // Remove an image from the preview and files
-  const removeImage = (index) => {
-    setImagePreview((prev) => prev.filter((_, i) => i !== index)); // Remove from previews
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index)); // Remove from files
-  };
-
-  // Handle image upload to Supabase storage and insertion into the database
-  const handleUpload = async () => {
-    try {
-      if (!listingId) {
-        toast.error("Listing ID is required to upload images.");
+      if (error) {
+        console.error("Error creating new listing:", error.message);
         return;
       }
 
-      setLoading(true);
+      if (data && data.id) {
+        setListingId(data.id); // Set the new listing ID
+      }
+    };
 
-      for (const file of uploadedFiles) {
-        const fileName = `${Date.now()}_${file.name}`; // Unique file name
-        const fileExt = file.name.split(".").pop();
+    createNewListing();
+  }, []);
 
-        // Upload file to Supabase storage
-        const { error: uploadError } = await supabase.storage
+  // Handle file selection and preview generation
+  const handleFileUpload = (event) => {
+    const files = event.target.files;
+    setSelectedFiles(files);
+    const previews = Array.from(files).map((file) => URL.createObjectURL(file));
+    setImagePreview(previews);
+  };
+
+  // Handle file upload to Supabase (Store file in bucket and URL in DB)
+  const uploadFiles = async () => {
+    if (!listingId) {
+      alert("Listing ID not found. Try again later.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const uploadPromises = Array.from(selectedFiles).map(async (file) => {
+        const filePath = `${Date.now()}_${file.name}`;
+
+        // Upload image file to Supabase storage bucket
+        const { data, error } = await supabase.storage
           .from("listingimages")
-          .upload(fileName, file, {
-            contentType: `image/${fileExt}`, // Set appropriate content type
+          .upload(filePath, file);
+
+        if (error) {
+          console.error("Error uploading file:", error.message);
+          alert("Error uploading file. Please try again.");
+          return null;
+        }
+
+        // Construct file URL
+        const fileUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/listingimages/${filePath}`;
+
+        // Insert file URL into listingimages table
+        const { error: insertError } = await supabase
+          .from("listingimages")
+          .insert({
+            listing_id: listingId,
+            url: fileUrl,
           });
 
-        if (uploadError) {
-          console.error("Error uploading image:", uploadError.message);
-          toast.error(`Failed to upload ${file.name}: ${uploadError.message}`);
-          continue; // Skip to the next file
+        if (insertError) {
+          console.error("Error inserting file URL into database:", insertError.message);
+          alert("Error saving file URL to the database. Please try again.");
+          return null;
         }
 
-        // Generate public URL for the image
-        const { data: publicUrlData, error: urlError } = supabase.storage
-          .from("listingimages")
-          .getPublicUrl(fileName);
+        console.log("File uploaded and URL saved successfully:", fileUrl);
+        return fileUrl;
+      });
 
-        if (urlError) {
-          console.error("Error generating public URL:", urlError.message);
-          toast.error(`Failed to generate public URL for ${file.name}`);
-          continue; // Skip to the next file
-        }
-
-        const imageUrl = publicUrlData.publicUrl;
-
-        // Insert image URL and listing_id into the database
-        const { error: dbError } = await supabase
-          .from("listingimages")
-          .insert([{ url: imageUrl, listing_id: listingId }]);
-
-        if (dbError) {
-          console.error("Error saving image to database:", dbError.message);
-          toast.error(`Failed to save image in database: ${dbError.message}`);
-          continue; // Skip to the next file
-        }
-
-        toast.success(`Uploaded and saved ${file.name} successfully.`);
-      }
-
-      toast.success("All images uploaded and associated with the listing successfully!");
-      setImagePreview([]); // Clear previews
-      setUploadedFiles([]); // Clear selected files
-    } catch (err) {
-      console.error("Error:", err.message);
-      toast.error("Something went wrong: " + err.message);
+      await Promise.all(uploadPromises);
+      alert("All files uploaded successfully!");
+    } catch (error) {
+      console.error("Error during upload:", error.message);
+      alert("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -96,26 +100,12 @@ function FileUpload({ listingId }) {
 
   return (
     <div>
-      {/* File Input for Image Selection */}
+      {/* File Input */}
       <label
         htmlFor="dropzone-file"
         className="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:bg-gray-800"
       >
         <div className="flex flex-col items-center justify-center pt-5 pb-6">
-          <svg
-            className="w-full h-8 mb-4 text-gray-500"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 20 16"
-          >
-            <path
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"
-            />
-          </svg>
           <p className="mb-2 text-sm text-gray-500">
             <span className="font-semibold">Click to upload</span> or drag and drop
           </p>
@@ -131,23 +121,11 @@ function FileUpload({ listingId }) {
         />
       </label>
 
-      {/* Image Previews with Remove Option */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-6">
+      {/* Image Previews */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mt-6">
         {imagePreview.map((image, index) => (
           <div key={index} className="relative">
-            <Image
-              src={image}
-              width={150}
-              height={150}
-              alt={`Preview ${index}`}
-              className="rounded-lg object-cover h-[100px] w-[100px]"
-            />
-            <button
-              onClick={() => removeImage(index)}
-              className="absolute top-1 right-1 bg-red-500 text-white rounded-full px-2 text-sm hover:bg-red-400"
-            >
-              ×
-            </button>
+            <Image src={image} width={150} height={150} alt={`Preview ${index}`} className="rounded-lg object-cover" />
           </div>
         ))}
       </div>
@@ -155,11 +133,18 @@ function FileUpload({ listingId }) {
       {/* Upload Button */}
       <button
         className="mt-6 px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-400"
-        onClick={handleUpload}
-        disabled={loading || !uploadedFiles.length}
+        onClick={uploadFiles}
+        disabled={loading || !listingId}
       >
-        {loading ? "Uploading..." : "Upload Images"}
+        {loading ? "Uploading..." : "Upload"}
       </button>
+
+      {/* Display Listing ID */}
+      {listingId ? (
+        <p className="mt-4 text-gray-500">New Listing ID: {listingId}</p>
+      ) : (
+        <p className="mt-4 text-red-500">No listing ID created yet!</p>
+      )}
     </div>
   );
 }

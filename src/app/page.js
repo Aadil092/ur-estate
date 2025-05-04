@@ -1,6 +1,6 @@
 import Displaylisting from '@/components/DisplayListing'
 import React from 'react'
-import { Icon } from 'lucide-react'
+import Image from 'next/image'
 
 function page() {
   return (
@@ -157,7 +157,7 @@ function page() {
                 <img src="/icons/facebook.svg" alt="Facebook" className="w-6 h-6 hover:opacity-75" />
               </a>
               <a href="mailto:urrealestate@gmail.com">
-                <img src="/icons/gmail.svg]" alt="Gmail" className="w-6 h-6 hover:opacity-75" />
+                <img src="/icons/gmail.svg" alt="Gmail" className="w-6 h-6 hover:opacity-75" />
               </a>
             </div>
           </div>
