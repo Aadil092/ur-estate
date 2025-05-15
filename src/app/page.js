@@ -8,6 +8,37 @@ function page() {
       <Displaylisting />
       <div>
         {/* Top Agents and Brokers Section */}
+
+        <div className="mt-10">
+        <h3 className="font-bold text-xl mb-4 text-center text-gray-800">
+          Featured Properties
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Property 1 */}
+          <div className="p-4 rounded-lg shadow bg-white border border-gray-300">
+            <img src="/Screenshot 2025-05-15 170420.jpg" alt="Property" width={550} height={250} />
+            <h5 className= "text-gray-700 mt-2 font-bold text-xl text-center">Luxury Villa</h5>
+            <p className="text-green-500 font-bold text-xl text-center">Price: ₹1.5 Cr</p>
+            <p className="text-gray-500 font-bold text-xl text-center">Location: Mumbai</p>
+          </div>
+
+          {/* Property 2 */}
+          <div className="p-4 rounded-lg shadow bg-white border border-gray-300">
+            <img src="/Screenshot 2025-05-15 170731.jpg" alt="Property" width={600} height={200} />
+            <h5 className="font-bold text-xl text-gray-700 mt-2 text-center">Modern Apartment</h5>
+            <p className="text-green-500 font-bold text-xl text-center">Price: ₹90 Lakh</p>
+            <p className="text-gray-500 font-bold text-xl text-center">Location: Bangalore</p>
+          </div>
+
+          {/* Property 3 */}
+          <div className="p-4 rounded-lg shadow bg-white border border-gray-300">
+            <img src="/Screenshot 2025-05-15 170854.jpg" alt="Property" width={600} height={200} />
+            <h5 className="font-bold text-xl text-center text-gray-700 mt-2">Beach House</h5>
+            <p className="text-green-500 font-bold text-xl text-center">Price: ₹2 Cr</p>
+            <p className="text-gray-500 font-bold text-xl text-center">Location: Goa</p>
+          </div>
+        </div>
+      </div>
         <div className="mt-10">
           <h3 className="font-bold text-xl mb-4 text-center text-gray-800">
             Top Agents and Brokers
